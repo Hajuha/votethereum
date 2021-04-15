@@ -9,6 +9,7 @@ const App = () => {
     const [web3, setWeb3] = useState();
     const [candidates, setCandidates] = useState([]);
     const [candidatesCount, setCandidatesCount] = useState([]);
+    const [isCanVote, setIsCanVote] = useState(false);
 
     const init = async () => {
         var web3 = await getWeb3();
@@ -41,19 +42,23 @@ const App = () => {
                 });
             _candidates.push(candidate);
         }
+
         setCandidates(_candidates);
     };
 
     useEffect(() => {
         init();
+        ElectionInstance && isVoting();
     }, []);
 
     useEffect(() => {
         getCandidates();
+        ElectionInstance && isVoting();
     }, [candidatesCount]);
 
     useEffect(() => {
         ElectionInstance && getCandidatesCount();
+        ElectionInstance && isVoting();
     }, [ElectionInstance]);
 
     const columns = [
@@ -81,6 +86,16 @@ const App = () => {
             defaultSortOrder: 'descend',
             sorter: (a, b) => a.totalVote - b.totalVote,
         },
+        {
+            key: 'vote',
+            render: (text, record) => (
+                <Button
+                    onClick={() => voteCandidate(record.id)}
+                    disabled={isVoted() === true || !isCanVote}>
+                    {isVoted() === true ? 'Voted' : 'Vote'}
+                </Button>
+            ),
+        },
     ];
 
     const getCandidatesCount = async () => {
@@ -94,15 +109,44 @@ const App = () => {
             .addCandidate(values.candidate, values.party)
             .send({ from: accounts[0] })
             .then((result) => {
-                console.log('loading');
                 getCandidatesCount();
-            });
+            })
+            .catch((err) => console.log(err));
+    };
+
+    const voteCandidate = async (id) => {
+        await ElectionInstance.methods
+            .vote(id)
+            .send({ from: accounts[0] })
+            .then((result) => {
+                getCandidates();
+            })
+            .catch((err) => console.log(err));
     };
 
     const onFinish = (values) => {
         addCandidate(values);
     };
 
+    const isVoted = async () => {
+        const _isVoted = await ElectionInstance.methods
+            .voters(accounts[0])
+            .call();
+        console.log(_isVoted);
+        return _isVoted;
+    };
+
+    const isVoting = async () => {
+        const _isVoting = await ElectionInstance.methods.getIsVoting().call();
+        setIsCanVote(_isVoting);
+    };
+
+    const startVoting = async () => {
+        await ElectionInstance.methods
+            .startVoting()
+            .send({ from: accounts[0] });
+    };
+    console.log(accounts[0]);
     if (accounts === []) return <div></div>;
     return (
         <div className='App'>
@@ -110,7 +154,10 @@ const App = () => {
             <Form
                 name='basic'
                 initialValues={{ remember: true }}
-                onFinish={onFinish}>
+                onFinish={onFinish}
+                style={{
+                    display: isCanVote ? 'none' : 'unset',
+                }}>
                 <Form.Item label='Candidate' name='candidate'>
                     <Input />
                 </Form.Item>
@@ -124,6 +171,7 @@ const App = () => {
                         Submit
                     </Button>
                 </Form.Item>
+                <Button onClick={() => startVoting()}>Start Voting!</Button>
             </Form>
         </div>
     );
